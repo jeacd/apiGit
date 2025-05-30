@@ -1,224 +1,177 @@
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
-import { useEffect, useState } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Modal from 'react-native-modal';
+import { SetStateAction, useEffect, useState } from 'react'
+import { Alert, StyleSheet, Text, TouchableOpacity } from 'react-native'
+
+import ParallaxScrollView from '@/components/ParallaxScrollView'
+import { ThemedText } from '@/components/ThemedText'
+import { ThemedView } from '@/components/ThemedView'
+
+import Git from '@/components/gitCard/Git'
+import GitModal from '@/components/modals/GitModal'
+import { IGit } from '@/interfaces/IGit'
+
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import axios from 'axios'
 
 export default function GitHubReposScreen() {
-  const [repos, setRepos] = useState<any[]>([]);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [ownerId, setOwnerId] = useState('');
-  const [repoId, setRepoId] = useState('');
-  const [error, setError] = useState('');
+    const [gits, setGits] = useState<IGit[]>([])
+    const [modalVisible, setModalVisible] = useState<boolean>(false)
+    const [selectedGit, setSelectedGit] = useState<IGit | undefined>(undefined)
+    
 
-  useEffect(() => {
-    loadRepos();
-  }, []);
+    useEffect(() => {
+        async function loadRepos() {
+            try {
+                const data = await AsyncStorage.getItem('@GitApiApp:gits')
+                const gitsData = data != null ? JSON.parse(data) : []
+                setGits(gitsData)
+            } catch (e) {
+            }
+        }
+        loadRepos()
+    }, [])
 
-  const loadRepos = async () => {
-    try {
-      const savedRepos = await AsyncStorage.getItem('@github_repos');
-      if (savedRepos) {
-        setRepos(JSON.parse(savedRepos));
-      }
-    } catch (err) {
-      console.error('Erro ao carregar repositórios:', err);
-    }
-  };
-
-  const saveRepos = async (reposToSave: any[]) => {
-    try {
-      await AsyncStorage.setItem('@github_repos', JSON.stringify(reposToSave));
-    } catch (err) {
-      console.error('Erro ao salvar repositórios:', err);
-    }
-  };
-
-  const handleAddRepo = async () => {
-    if (!ownerId || !repoId) {
-      setError('Preencha ambos os campos');
-      return;
+    const getRepo = async (ownerName: string, repoName: string) => {
+        const response = await axios.get(`https://api.github.com/repos/${ownerName}/${repoName}`)
+        return response.data
     }
 
-    try {
-      const response = await axios.get(`https://api.github.com/repos/${ownerId}/${repoId}`);
-      const newRepo = response.data;
-      
-      if (!repos.some(repo => repo.id === newRepo.id)) {
-        const updatedRepos = [...repos, newRepo];
-        setRepos(updatedRepos);
-        saveRepos(updatedRepos);
-        setOwnerId('');
-        setRepoId('');
-        setError('');
-        setModalVisible(false);
-      } else {
-        setError('Repositório já adicionado');
-      }
-    } catch (err) {
-      setError('Repositório não encontrado');
-      console.error(err);
+    const onAdd = async (repoName: string, ownerName: string, id?: number): Promise<boolean> => {
+        try {
+            const repoData = await getRepo(ownerName, repoName)
+    
+            if (!id || id <= 0) {
+                const newGit: IGit = {
+                    id: Math.floor(Math.random() * 100000),
+                    repoName: repoData.name,
+                    repoVisibility: repoData.visibility || (repoData.private ? 'private' : 'public'),
+                    repoCreateDate: repoData.created_at,
+                    ownerName: repoData.owner.login,
+                    ownerProfile: repoData.owner.html_url,
+                    ownerPhoto: repoData.owner.avatar_url
+                }
+                const updatedGits = [...gits, newGit]
+                setGits(updatedGits)
+                AsyncStorage.setItem('@GitApiApp:gits', JSON.stringify(updatedGits))
+            } else {
+                gits.forEach(git => {
+                    if(git.id == id){
+                        git.repoName = repoData.name,
+                        git.repoVisibility = repoData.visibility || (repoData.private ? 'private' : 'public'),
+                        git.repoCreateDate = repoData.created_at,
+                        git.ownerName = repoData.owner.login,
+                        git.ownerProfile = repoData.owner.html_url,
+                        git.ownerPhoto = repoData.owner.avatar_url
+                    }
+                })
+                AsyncStorage.setItem('@GitApiApp:gits', JSON.stringify(gits))
+            }
+            setModalVisible(false)
+            return true
+        } catch (error: any) {
+            alert('Repositório não encontrado. Verifique o nome do repositório e do proprietário.')
+            return false
+        }
     }
-  };
 
-  const handleClearRepos = () => {
-    Alert.alert(
-      'Limpar repositórios',
-      'Tem certeza que deseja remover todos os repositórios salvos?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Limpar',
-          style: 'destructive',
-          onPress: () => {
-            setRepos([]);
-            AsyncStorage.removeItem('@github_repos');
-          },
-        },
-      ]
-    );
-  };
+    const onDelete = (id: number) => {
+        const newGits = gits.filter(git => git.id !== id)
+        setGits(newGits)
+        AsyncStorage.setItem('@GitApiApp:gits', JSON.stringify(newGits));
+        setModalVisible(false)
+    }
 
-  return (
-    <ThemedView style={styles.container}>
-      <ThemedView style={styles.header}>
-        <TouchableOpacity onPress={handleClearRepos}>
-          <Text style={styles.headerButton}>-</Text>
-        </TouchableOpacity>
-        <ThemedText type="title" style={styles.title}>Repositórios GitHub</ThemedText>
-        <TouchableOpacity onPress={() => setModalVisible(true)}>
-          <Text style={styles.headerButton}>+</Text>
-        </TouchableOpacity>
-      </ThemedView>
+    const onReset = () => {
+        Alert.alert(
+            'Limpar repositórios',
+            'Tem certeza que deseja remover todos os repositórios salvos?',
+            [
+              { text: 'Cancelar', style: 'cancel' },
+              {
+                text: 'Limpar',
+                style: 'destructive',
+                onPress: () => {
+                    const emptyList: SetStateAction<IGit[]> = []
+                    setGits(emptyList)
+                    AsyncStorage.setItem('@GitApiApp:gits', JSON.stringify(emptyList))
+                },
+              },
+            ]
+        )
+    }
 
-      <ThemedView style={styles.list}>
-        {repos.length > 0 ? (
-          repos.map(repo => (
-            <ThemedView key={repo.id} style={styles.repoItem}>
-              <ThemedText type="subtitle">{repo.name}</ThemedText>
-              <ThemedText>{repo.description || 'Sem descrição'}</ThemedText>
-              <ThemedText>⭐ {repo.stargazers_count} | 🍴 {repo.forks_count}</ThemedText>
-              <ThemedText>👤 {repo.owner.login}</ThemedText>
+    const openModal = () => {
+        setSelectedGit(undefined)
+        setModalVisible(true)
+    }
+    const openEditModal = (selectedGit: IGit) => {
+        setSelectedGit(selectedGit)
+        setModalVisible(true)
+    }
+    const closeModal = () => {
+        setSelectedGit(undefined)
+        setModalVisible(false)
+    }
+
+    return (
+        <ParallaxScrollView headerBackgroundColor={{ light: '#ECECEC', dark: '#202020' }}>
+            <ThemedView style={styles.headerContainer}>
+                <TouchableOpacity onPress={() => onReset()}>
+                    <Text style={styles.headerButton}>-</Text>
+                </TouchableOpacity>
+                <ThemedText style={styles.headerTitle}>Repositórios GitHub</ThemedText>
+                <TouchableOpacity onPress={() => openModal()}>
+                    <Text style={styles.headerButton}>+</Text>
+                </TouchableOpacity>
             </ThemedView>
-          ))
-        ) : (
-          <ThemedText style={styles.emptyText}>Nenhum repositório adicionado</ThemedText>
-        )}
-      </ThemedView>
 
-      <Modal isVisible={modalVisible} onBackdropPress={() => setModalVisible(false)}>
-        <ThemedView style={styles.modalContent}>
-          <ThemedText type="title" style={styles.modalTitle}>Adicionar Repositório</ThemedText>
-          
-          <TextInput
-            style={styles.input}
-            placeholder="Owner ID (usuário)"
-            value={ownerId}
-            onChangeText={setOwnerId}
-          />
-          
-          <TextInput
-            style={styles.input}
-            placeholder="Repo ID (repositório)"
-            value={repoId}
-            onChangeText={setRepoId}
-          />
-          
-          {error ? <ThemedText style={styles.error}>{error}</ThemedText> : null}
-          
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity style={styles.cancelButton} onPress={() => setModalVisible(false)}>
-              <ThemedText style={styles.buttonText}>Cancelar</ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.addButton} onPress={handleAddRepo}>
-              <ThemedText style={styles.buttonText}>Adicionar</ThemedText>
-            </TouchableOpacity>
-          </View>
-        </ThemedView>
-      </Modal>
-    </ThemedView>
-  );
+            <ThemedView>
+                {gits.length > 0 ? (
+                    gits.map(git => (
+                        <TouchableOpacity key={git.id} onPress={() => openEditModal(git)}>
+                            <Git 
+                                repoName={git.repoName} 
+                                repoVisibility={git.repoVisibility} 
+                                repoCreateDate={git.repoCreateDate} 
+                                ownerName={git.ownerName}
+                                ownerProfile={git.ownerProfile}
+                                ownerPhoto={git.ownerPhoto}
+                                id={git.id} 
+                                onDelete={onDelete}
+                            />
+                        </TouchableOpacity>
+                    ))
+                ) : (
+                    <ThemedText style={styles.emptyList}>Nenhum repositório adicionado</ThemedText>
+                    )
+                }
+            </ThemedView>
+
+            <GitModal 
+                visible={modalVisible} 
+                onCancel={closeModal} 
+                onAdd={onAdd} 
+                git={selectedGit}
+            />
+        </ParallaxScrollView>
+    )
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  title: {
-    flex: 1,
-    textAlign: 'center',
-    marginHorizontal: 10,
-  },
-  headerButton: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#007BFF',
-  },
-  list: {
-    flex: 1,
-  },
-  repoItem: {
-    padding: 16,
-    marginBottom: 10,
-    borderRadius: 8,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-  },
-  emptyText: {
-    textAlign: 'center',
-    marginTop: 20,
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 10,
-  },
-  modalTitle: {
-    marginBottom: 15,
-    textAlign: 'center',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    padding: 10,
-    marginBottom: 15,
-    borderRadius: 5,
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
-  },
-  cancelButton: {
-    backgroundColor: '#ff4444',
-    padding: 10,
-    borderRadius: 5,
-    flex: 1,
-    marginRight: 5,
-    alignItems: 'center',
-  },
-  addButton: {
-    backgroundColor: '#4CAF50',
-    padding: 10,
-    borderRadius: 5,
-    flex: 1,
-    marginLeft: 5,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: 'white',
-  },
-  error: {
-    color: 'red',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-});
+    headerContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between'
+    },
+    headerButton: {
+        fontSize: 40,
+        fontWeight: 'bold',
+        color: '#007BFF',
+    },
+    emptyList: {
+        textAlign: 'center',
+    },
+    headerTitle: {
+        fontSize: 25,
+        fontWeight: 'bold',
+        paddingTop: 12
+    }
+})
