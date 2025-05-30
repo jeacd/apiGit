@@ -1,60 +1,71 @@
-import React, { useState } from "react"
+import React, { useEffect, useState } from "react"
 import { Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native"
 
-export type TeamModalProps = {
+import { IGit } from "@/interfaces/IGit"
+
+export type GitModalProps = {
     visible: boolean
-    onAdd: (name: string, pilot1: string, pilot2: string) => void
+    onAdd: (repoName: string, ownerName: string, id?: number) => Promise<boolean>
     onCancel: () => void
+    git?: IGit
 }
 
-export default function RaceModal({ visible, onAdd, onCancel }: TeamModalProps) {
-    const [name, setName] = useState('')
-    const [pilot1, setPilot1] = useState('')
-    const [pilot2, setPilot2] = useState('')
+export default function RaceModal({ visible, onAdd, onCancel, git }: GitModalProps) {
+    const [repoName, setRepoName] = useState('')
+    const [ownerName, setOwnerName] = useState('')
+    const [id, setId] = useState<number>(0)
+
+    useEffect(() => {
+        if (git) {
+            setRepoName(git.repoName);
+            setOwnerName(git.ownerName);
+            setId(git.id);
+        } else {
+            setRepoName('');
+            setOwnerName('');
+            setId(0);
+        }
+    }, [git]);
 
     return (
-        <Modal visible={visible} animationType='fade' transparent={true}>
+        <Modal visible={visible} animationType='fade' transparent={true} onRequestClose={() => {}}>
             <View style={styles.container}>
                 <View style={styles.modalContainer}>
+                <Text style={styles.title}> {git ? 'Editar Repositório' : 'Adicionar Repositório'}</Text>
                     <TextInput
                         style={styles.boxInput}
-                        placeholder='Nome da equipe'
-                        value={name}
-                        onChangeText={setName}
+                        placeholder='Nome do repositório'
+                        value={repoName}
+                        onChangeText={setRepoName}
                         autoFocus
                     />
                     <TextInput
                         style={styles.boxInput}
-                        placeholder='Nome do piloto 1'
-                        value={pilot1}
-                        onChangeText={setPilot1}
+                        placeholder='Nome do proprietário'
+                        value={ownerName}
+                        onChangeText={setOwnerName}
                     />
-                    <TextInput
-                        style={styles.boxInput}
-                        placeholder='Nome do piloto 2'
-                        value={pilot2}
-                        onChangeText={setPilot2}
-                    />
-
                     <View style={styles.buttonContainer}>
-                        <TouchableOpacity style={styles.buttonAdd} onPress={
-                            () => {
-                                onAdd(name, pilot1, pilot2)
-                                setName('')
-                                setPilot1('')
-                                setPilot2('')
-                            }}>
-                            <Text style={styles.buttonText}>Add</Text>
-                        </TouchableOpacity>
-
                         <TouchableOpacity style={styles.buttonCancel} onPress={
                             () => {
                                 onCancel()
-                                setName('')
-                                setPilot1('')
-                                setPilot2('')
+                                setRepoName('')
+                                setOwnerName('')
                             }}>
-                            <Text style={styles.buttonText}>Cancel</Text>
+                            <Text style={styles.buttonText}>Cancelar</Text>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity
+                            style={styles.buttonAdd}
+                            onPress={async () => {
+                                const success = await onAdd(repoName, ownerName, id)
+                                if (success) {
+                                    setRepoName('')
+                                    setOwnerName('')
+                                }
+                            }}
+                        >
+                            <Text style={styles.buttonText}>Salvar</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -88,12 +99,12 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
     },
     buttonAdd: {
-        backgroundColor: '#4CAF50',
+        backgroundColor: 'green',
         padding: 10,
         borderRadius: 5,
     },
     buttonCancel: {
-        backgroundColor: '#f44336',
+        backgroundColor: 'orange',
         padding: 10,
         borderRadius: 5,
     },
@@ -101,4 +112,10 @@ const styles = StyleSheet.create({
         color: 'white',
         fontWeight: 'bold',
     },
+    title: {
+        fontSize: 24,
+        marginBottom: 20,
+        textAlign: 'center',
+        fontWeight: 'bold'
+    }
 })
