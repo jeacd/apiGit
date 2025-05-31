@@ -10,7 +10,7 @@ export type GitModalProps = {
     git?: IGit
 }
 
-export default function RaceModal({ visible, onAdd, onCancel, git }: GitModalProps) {
+export default function GitModal({ visible, onAdd, onCancel, git }: GitModalProps) {
     const [repoName, setRepoName] = useState('')
     const [ownerName, setOwnerName] = useState('')
     const [id, setId] = useState<number>(0)
